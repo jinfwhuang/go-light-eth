@@ -8,4 +8,4 @@
 - Lightweight execution client
 
 ### Status
-- Early-experimental!
+- Extremely-early-experimental-stage!

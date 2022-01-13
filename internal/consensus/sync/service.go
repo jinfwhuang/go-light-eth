@@ -6,12 +6,8 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
-	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
-	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	eth2_types "github.com/prysmaticlabs/eth2-types"
-	grpcutil "github.com/prysmaticlabs/prysm/api/grpc"
 	"github.com/prysmaticlabs/prysm/config/params"
 	"github.com/prysmaticlabs/prysm/time/slots"
 	log "github.com/sirupsen/logrus"
@@ -22,7 +18,6 @@ import (
 	//lightnode "github.com/prysmaticlabs/prysm/cmd/lightclient/node"
 	lightclientdebug "github.com/prysmaticlabs/prysm/cmd/light-client/debug"
 	ethpb "github.com/prysmaticlabs/prysm/proto/prysm/v1alpha1"
-	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 	tmplog "log"
@@ -74,8 +69,8 @@ type Service struct {
 
 type Config struct {
 	TrustedCurrentCommitteeRoot string // Merkle root in base64 string
-	SyncMode                    SyncMode
-	DataDir                     string
+	SyncMode SyncMode
+	DataDir  string
 	// grpc
 	FullNodeServerEndpoint string
 	GrpcMaxCallRecvMsgSize int
@@ -112,19 +107,19 @@ func (s *Service) Start() {
 			grpc_retry.WithMax(uint(s.cfg.GrpcRetries)),
 			grpc_retry.WithBackoff(grpc_retry.BackoffLinear(s.cfg.GrpcRetryDelay)),
 		),
-		grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
-		grpc.WithUnaryInterceptor(middleware.ChainUnaryClient(
-			grpc_opentracing.UnaryClientInterceptor(),
-			grpc_prometheus.UnaryClientInterceptor,
-			grpc_retry.UnaryClientInterceptor(),
-			grpcutil.LogRequests,
-		)),
-		grpc.WithChainStreamInterceptor(
-			grpcutil.LogStream,
-			grpc_opentracing.StreamClientInterceptor(),
-			grpc_prometheus.StreamClientInterceptor,
-			grpc_retry.StreamClientInterceptor(),
-		),
+		//grpc.WithStatsHandler(&ocgrpc.ClientHandler{}),
+		//grpc.WithUnaryInterceptor(middleware.ChainUnaryClient(
+		//	grpc_opentracing.UnaryClientInterceptor(),
+		//	grpc_prometheus.UnaryClientInterceptor,
+		//	grpc_retry.UnaryClientInterceptor(),
+		//	grpcutil.LogRequests,
+		//)),
+		//grpc.WithChainStreamInterceptor(
+		//	grpcutil.LogStream,
+		//	grpc_opentracing.StreamClientInterceptor(),
+		//	grpc_prometheus.StreamClientInterceptor,
+		//	grpc_retry.StreamClientInterceptor(),
+		//),
 		grpc.WithInsecure(),
 		//grpc.WithResolvers(&multipleEndpointsGrpcResolverBuilder{}),
 	}

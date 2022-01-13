@@ -2,9 +2,9 @@ package tree
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 
-	"github.com/pkg/errors"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
 	"github.com/protolambda/ztyp/view"
@@ -130,7 +130,7 @@ func (tb *TreeBackedState) Proof(
 ) (proof [][]byte, generalizedIdx tree.Gindex64, err error) {
 	cont, ok := tb.beaconState.(*view.ContainerView)
 	if !ok {
-		err = errors.New("not a container")
+		err = fmt.Errorf("not a container")
 		return
 	}
 	depth := tree.CoverDepth(cont.FieldCount())
