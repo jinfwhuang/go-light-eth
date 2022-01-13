@@ -2,9 +2,9 @@ package node
 
 import (
 	"context"
-	lightrpc "github.com/prysmaticlabs/prysm/cmd/light-client/rpc"
-	lightsync "github.com/prysmaticlabs/prysm/cmd/light-client/sync"
-	lightutil "github.com/prysmaticlabs/prysm/cmd/light-client/util"
+	lightrpc "github.com/jinfwhuang/go-light-eth/internal/consensus/rpc"
+	lightsync "github.com/jinfwhuang/go-light-eth/internal/consensus/sync"
+	lightutil "github.com/jinfwhuang/go-light-eth/internal/consensus/util"
 	"github.com/prysmaticlabs/prysm/runtime"
 	"github.com/prysmaticlabs/prysm/runtime/debug"
 	"github.com/urfave/cli/v2"

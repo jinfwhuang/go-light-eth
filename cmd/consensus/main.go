@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/prysmaticlabs/go-bitfield"
-	lightnode "github.com/prysmaticlabs/prysm/cmd/light-client/node"
+	lightnode "github.com/jinfwhuang/go-light-eth/internal/consensus/node"
 
 	v1 "github.com/prysmaticlabs/prysm/proto/eth/v1"
 	v2 "github.com/prysmaticlabs/prysm/proto/eth/v2"
