@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	server := ethpb.NewLightClientClient(conn)
+	server := ethpb.NewLightUpdateClient(conn)
 
 	resp, err := server.DebugGetTrustedCurrentCommitteeRoot(ctx, &empty.Empty{})
 	if err != nil {

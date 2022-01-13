@@ -44,11 +44,6 @@ type LightClientUpdate struct {
 	ForkVersion             *v1alpha1.Version
 }
 
-type Store struct {
-	Snapshot     *LightClientSnapshot
-	ValidUpdates []*LightClientUpdate
-}
-
 func main() {
 	app := cli.App{}
 	app.Name = "beacon-chain-light-client"

@@ -29,6 +29,9 @@ go run -v ./cmd/light-client/ \
 # --trusted-current-committee-root='UeSv92gwGs+DSk34NqOaCM1DaU9zyclQE6Tc9morK0M='  // roughly 2021-12-02
 # --trusted-current-committee-root='rcWo3eE6KOLBLDQeahrXkdzxjWnE8qYHmL8HyNWv7b8='  // roughly 2021-12-03
 
+# Check the server availability
+grpcurl -plaintext localhost:4000 list
+
 # Ge the current head
 grpcurl -plaintext localhost:4001 ethereum.eth.v1alpha1.LightNode.Head
 ```
