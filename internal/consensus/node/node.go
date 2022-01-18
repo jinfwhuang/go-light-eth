@@ -17,29 +17,34 @@ import (
 )
 
 var (
+	NetworkingMode = &cli.StringFlag{
+		Name:  "networking-mode",  // grpc, json-rpc, libp2p, portal
+		Usage: "TODO: xxx",
+		Value: "grpc",
+	}
 	FullNodeServerEndpoint = &cli.StringFlag{
 		Name:  "full-node-server-endpoint",
-		Usage: "xxx",
+		Usage: "TODO: xxx",
 		Value: "localhost:4000",
 	}
 	SyncModeStr = &cli.StringFlag{
 		Name:  "sync-mode",
-		Usage: "xxx",
+		Usage: "TODO: xxx",
 		Value: "latest",
 	}
 	DataDir = &cli.StringFlag{
 		Name:  "data-dir",
-		Usage: "xxx",
+		Usage: "TODO: xxx",
 		Value: "../prysm-data/lightnode/",
 	}
 	GrpcPort = &cli.IntFlag{
 		Name:  "grpc-port",
-		Usage: "xxx",
+		Usage: "TODO: xxx",
 		Value: 4001,
 	}
 	GrpcGatewayPort = &cli.IntFlag{
 		Name:  "grpc-gateway-port",
-		Usage: "xxx",
+		Usage: "TODO: xxx",
 		Value: 3500,
 	}
 	GrpcMaxCallRecvMsgSize = &cli.IntFlag{
@@ -54,7 +59,7 @@ var (
 	}
 	GrpcRetries = &cli.IntFlag{
 		Name:  "grpc-retries",
-		Usage: "xxx",
+		Usage: "TODO: xxx",
 		Value: 3,
 	}
 	TrustedCurrentCommitteeRoot = &cli.StringFlag{
@@ -69,6 +74,7 @@ var (
 )
 
 var AppFlags = []cli.Flag{
+	NetworkingMode,
 	FullNodeServerEndpoint,
 	SyncModeStr,
 	DataDir,
