@@ -32,7 +32,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
+	//"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
+	"github.com/jinfwhuang/go-light-eth/pkg/discover/v5wire"
+
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -44,7 +46,7 @@ const (
 	totalNodesResponseLimit = 5  // applies in waitForNodes
 	nodesResponseItemLimit  = 3  // applies in sendNodes
 
-	respTimeoutV5 = 700 * time.Millisecond
+	respTimeoutV5 = 3000 * time.Millisecond
 )
 
 // codecV5 is implemented by v5wire.Codec (and testCodec).
@@ -73,6 +75,9 @@ type UDPv5 struct {
 	clock        mclock.Clock
 	validSchemes enr.IdentityScheme
 
+	// sctp
+
+
 	// talkreq handler registry
 	trlock     sync.Mutex
 	trhandlers map[string]TalkRequestHandler
@@ -95,7 +100,13 @@ type UDPv5 struct {
 	closeCtx       context.Context
 	cancelCloseCtx context.CancelFunc
 	wg             sync.WaitGroup
+
+	TalkExtConnections map[ConnectionId]TalkExtConnection
+	TalkExtHandlers map[string]TalkRequestHandler
+
 }
+
+type ConnectionId uint64
 
 // TalkRequestHandler callback processes a talk request and optionally returns a reply
 type TalkRequestHandler func(enode.ID, *net.UDPAddr, []byte) []byte
@@ -114,6 +125,11 @@ type callV5 struct {
 	handshakeCount int               // # times we attempted handshake for this call
 	challenge      *v5wire.Whoareyou // last sent handshake challenge
 	timeout        mclock.Timer
+
+	// TALK-EXT
+	talkExt bool
+	talkExtAnchor bool
+
 }
 
 // callTimeout is the response timeout event of a call.
@@ -164,6 +180,9 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		// shutdown
 		closeCtx:       closeCtx,
 		cancelCloseCtx: cancelCloseCtx,
+
+		TalkExtConnections: make(map[ConnectionId]TalkExtConnection),
+		TalkExtHandlers: make(map[string]TalkRequestHandler),
 	}
 	tab, err := newTable(t, t.db, cfg.Bootnodes, cfg.Log)
 	if err != nil {
@@ -390,7 +409,7 @@ func (t *UDPv5) waitForNodes(c *callV5, distances []uint) ([]*enode.Node, error)
 			for _, record := range response.Nodes {
 				node, err := t.verifyResponseNode(c, record, distances, seen)
 				if err != nil {
-					t.log.Debug("Invalid record in "+response.Name(), "id", c.node.ID(), "err", err)
+					t.log.Debug("Invalid record in "+response.Name(), "Id", c.node.ID(), "err", err)
 					continue
 				}
 				nodes = append(nodes, node)
@@ -441,6 +460,8 @@ func containsUint(x uint, xs []uint) bool {
 	return false
 }
 
+
+
 // call sends the given call and sets up a handler for response packets (of message type
 // responseType). Responses are dispatched to the call's response channel.
 func (t *UDPv5) call(node *enode.Node, responseType byte, packet v5wire.Packet) *callV5 {
@@ -458,7 +479,7 @@ func (t *UDPv5) call(node *enode.Node, responseType byte, packet v5wire.Packet) 
 	// Send call to dispatch.
 	select {
 	case t.callCh <- c:
-	case <-t.closeCtx.Done():
+	case <-t.closeCtx.Done():  // There is data in the t.closeCtx.Done channel
 		c.err <- errClosed
 	}
 	return c
@@ -611,11 +632,11 @@ func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c
 	addr := toAddr.String()
 	enc, nonce, err := t.codec.Encode(toID, addr, packet, c)
 	if err != nil {
-		t.log.Warn(">> "+packet.Name(), "id", toID, "addr", addr, "err", err)
+		t.log.Warn(">> "+packet.Name(), "Id", toID, "addr", addr, "err", err)
 		return nonce, err
 	}
 	_, err = t.conn.WriteToUDP(enc, toAddr)
-	t.log.Trace(">> "+packet.Name(), "id", toID, "addr", addr)
+	t.log.Trace(">> "+packet.Name(), "Id", toID, "addr", addr)
 	return nonce, err
 }
 
@@ -656,7 +677,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	addr := fromAddr.String()
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
 	if err != nil {
-		t.log.Debug("Bad discv5 packet", "id", fromID, "addr", addr, "err", err)
+		t.log.Debug("Bad discv5 packet", "Id", fromID, "addr", addr, "err", err)
 		return err
 	}
 	if fromNode != nil {
@@ -665,7 +686,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.
-		t.log.Trace("<< "+packet.Name(), "id", fromID, "addr", addr)
+		t.log.Trace("<< "+packet.Name(), "Id", fromID, "addr", addr)
 	}
 	t.handle(packet, fromID, fromAddr)
 	return nil
@@ -675,15 +696,15 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, p v5wire.Packet) bool {
 	ac := t.activeCallByNode[fromID]
 	if ac == nil || !bytes.Equal(p.RequestID(), ac.reqid) {
-		t.log.Debug(fmt.Sprintf("Unsolicited/late %s response", p.Name()), "id", fromID, "addr", fromAddr)
+		t.log.Debug(fmt.Sprintf("Unsolicited/late %s response", p.Name()), "Id", fromID, "addr", fromAddr)
 		return false
 	}
 	if !fromAddr.IP.Equal(ac.node.IP()) || fromAddr.Port != ac.node.UDP() {
-		t.log.Debug(fmt.Sprintf("%s from wrong endpoint", p.Name()), "id", fromID, "addr", fromAddr)
+		t.log.Debug(fmt.Sprintf("%s from wrong endpoint", p.Name()), "Id", fromID, "addr", fromAddr)
 		return false
 	}
 	if p.Kind() != ac.responseType {
-		t.log.Debug(fmt.Sprintf("Wrong discv5 response type %s", p.Name()), "id", fromID, "addr", fromAddr)
+		t.log.Debug(fmt.Sprintf("Wrong discv5 response type %s", p.Name()), "Id", fromID, "addr", fromAddr)
 		return false
 	}
 	t.startResponseTimeout(ac)
@@ -720,7 +741,8 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) 
 	case *v5wire.Nodes:
 		t.handleCallResponse(fromID, fromAddr, p)
 	case *v5wire.TalkRequest:
-		t.handleTalkRequest(p, fromID, fromAddr)
+		//t.handleTalkRequest(p, fromID, fromAddr)
+		t.handleTalkExt(p, fromID, fromAddr)
 	case *v5wire.TalkResponse:
 		t.handleCallResponse(fromID, fromAddr, p)
 	}
@@ -751,7 +773,7 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *
 	}
 
 	// Resend the call that was answered by WHOAREYOU.
-	t.log.Trace("<< "+p.Name(), "id", c.node.ID(), "addr", fromAddr)
+	t.log.Trace("<< "+p.Name(), "Id", c.node.ID(), "addr", fromAddr)
 	c.handshakeCount++
 	c.challenge = p
 	p.Node = c.node
@@ -865,3 +887,5 @@ func (t *UDPv5) handleTalkRequest(p *v5wire.TalkRequest, fromID enode.ID, fromAd
 	resp := &v5wire.TalkResponse{ReqID: p.ReqID, Message: response}
 	t.sendResponse(fromID, fromAddr, resp)
 }
+
+

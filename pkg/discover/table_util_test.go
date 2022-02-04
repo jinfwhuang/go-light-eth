@@ -48,7 +48,7 @@ func newTestTable(t transport) (*Table, *enode.DB) {
 	return tab, db
 }
 
-// nodeAtDistance creates a node for which enode.LogDist(base, n.id) == ld.
+// nodeAtDistance creates a node for which enode.LogDist(base, n.Id) == ld.
 func nodeAtDistance(base enode.ID, ld int, ip net.IP) *node {
 	var r enr.Record
 	r.Set(enr.IP(ip))

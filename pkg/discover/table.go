@@ -306,7 +306,7 @@ func (tab *Table) loadSeedNodes() {
 	for i := range seeds {
 		seed := seeds[i]
 		age := log.Lazy{Fn: func() interface{} { return time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP())) }}
-		tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
+		tab.log.Trace("Found seed node in database", "Id", seed.ID(), "addr", seed.addr(), "age", age)
 		tab.addSeenNode(seed)
 	}
 }
@@ -329,7 +329,7 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	if last.Seq() < remoteSeq {
 		n, err := tab.net.RequestENR(unwrapNode(last))
 		if err != nil {
-			tab.log.Debug("ENR request failed", "id", last.ID(), "addr", last.addr(), "err", err)
+			tab.log.Debug("ENR request failed", "Id", last.ID(), "addr", last.addr(), "err", err)
 		} else {
 			last = &node{Node: *n, addedAt: last.addedAt, livenessChecks: last.livenessChecks}
 		}
@@ -341,16 +341,16 @@ func (tab *Table) doRevalidate(done chan<- struct{}) {
 	if err == nil {
 		// The node responded, move it to the front.
 		last.livenessChecks++
-		tab.log.Debug("Revalidated node", "b", bi, "id", last.ID(), "checks", last.livenessChecks)
+		tab.log.Debug("Revalidated node", "b", bi, "Id", last.ID(), "checks", last.livenessChecks)
 		tab.bumpInBucket(b, last)
 		return
 	}
 	// No reply received, pick a replacement or delete the node if there aren't
 	// any replacements.
 	if r := tab.replace(b, last); r != nil {
-		tab.log.Debug("Replaced dead node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks, "r", r.ID(), "rip", r.IP())
+		tab.log.Debug("Replaced dead node", "b", bi, "Id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks, "r", r.ID(), "rip", r.IP())
 	} else {
-		tab.log.Debug("Removed dead node", "b", bi, "id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks)
+		tab.log.Debug("Removed dead node", "b", bi, "Id", last.ID(), "ip", last.IP(), "checks", last.livenessChecks)
 	}
 }
 
@@ -392,7 +392,7 @@ func (tab *Table) copyLiveNodes() {
 	}
 }
 
-// findnodeByID returns the n nodes in the table that are closest to the given id.
+// findnodeByID returns the n nodes in the table that are closest to the given Id.
 // This is used by the FINDNODE/v4 handler.
 //
 // The preferLive parameter says whether the caller wants liveness-checked results. If

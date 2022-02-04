@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"os"
-
 	//"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -60,6 +59,8 @@ var (
 		dbpath: "/Users/jin/code/repos/go-light-eth/pkg/portalnet/tmp/nodedb/node2/db",
 		port: 58832,
 	}
+
+	NodeName3 = "node3"
 )
 
 
@@ -103,9 +104,6 @@ func newkey() *ecdsa.PrivateKey {
 }
 
 func startLocalhostV5(nodename string) *discover.UDPv5 {
-	tmplog.Println("node2")
-
-
 	// key
 	// address
 	// db path
@@ -189,15 +187,11 @@ func startLocalhostV5(nodename string) *discover.UDPv5 {
 		tmplog.Println(ln.Seq())
 	}
 
-	//tmplog.Fatal("fff")
-
 	// register a TalkRequest handler
-
 	udp.RegisterTalkHandler("bbb", func (node enode.ID, addr *net.UDPAddr, input []byte) []byte {
-		tmplog.Println("request coming from", addr)
-		tmplog.Println("responding in", udp.LocalNode().Node().IP(), udp.LocalNode().Node().UDP())
-
-		return append(input, []byte("output from " + nodename)...)
+		tmplog.Println("requesting from: ", addr)
+		tmplog.Println("responding from: ", udp.LocalNode().Node().IP(), udp.LocalNode().Node().UDP())
+		return append(input, []byte(nodename + "responded")...)
 	})
 
 
@@ -205,12 +199,69 @@ func startLocalhostV5(nodename string) *discover.UDPv5 {
 	//return nil
 }
 
-func bbbHandler(node enode.ID, addr *net.UDPAddr, input []byte) []byte {
-	tmplog.Println(node, addr)
-	tmplog.Println(string(input))
+func (s *Disv5Service) Start(nodename string) {
+	udpv5 := startLocalhostV5(nodename)
 
-	return append(input, []byte("output")...)
+	setupTalkExt(udpv5)
+
+
+	//target := random32Byte()
+	//tmplog.Println(target)
+
+	// event loop
+	for {
+		tmplog.Printf("listening with %v:%v", udpv5.Self().IP(), udpv5.Self().UDP())
+		tmplog.Printf("self %s", udpv5.LocalNode().Node())
+
+		//udpv5.Lookup(target)
+		nodes := udpv5.AllNodes()
+		tmplog.Println("peers", len(nodes))
+
+
+		for _, n := range nodes {
+			tmplog.Println(time.Now(), udpv5.Self().IP(), udpv5.Self().UDP())
+
+			if nodename == NodeName3 {
+				//response, err := udpv5.TalkRequest(n, "bbb", []byte(nodename + " made a request. | "))
+				//tmplog.Println("Just made a talkrequest", err, string(response))
+
+
+				//// Large quest should fail
+				//body := _requestBody(1281)
+				//tmplog.Println("About to make a large talkrequest", len(body), cap(body), body[:13])
+				////tmplog.Println(len(body), "utf validitiy", utf8.Valid(body[:50]))
+				//resp2, err := udpv5.TalkRequest(n, "bbb", body)
+				//if err != nil {
+				//	tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2)
+				//} else {
+				//	tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2[:13])
+				//}
+
+				// Talk ext
+				body := _requestBody(100)
+				tmplog.Println("About to make talk-ext", len(body), cap(body), body[:13])
+				resp2, err := TalkRequestExt(udpv5, n, "bbb", body)
+				if err != nil {
+					tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2)
+				} else {
+					tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2[:13])
+				}
+			}
+
+		}
+		time.Sleep(time.Second * 5)
+	}
 }
+
+/*
+UDP has a maximum packet size of 1280 bytes.
+ */
+func _requestBody(n int) []byte {
+	token := make([]byte, n)
+	rand.Read(token)
+	return token
+}
+
 
 
 func toEnr(n *enode.Node) string {
@@ -225,68 +276,4 @@ func fromEnr(addr string) *enode.Node {
 	return node
 }
 
-func (s *Disv5Service) Start(nodename string) {
 
-	udpv5 := startLocalhostV5(nodename)
-
-	//target := random32Byte()
-	//tmplog.Println(target)
-
-	// event loop
-	for {
-		time.Sleep(time.Second * 5)
-		tmplog.Printf("listening with %v:%v", udpv5.Self().IP(), udpv5.Self().UDP())
-		tmplog.Printf("self %s", udpv5.LocalNode().Node())
-
-		//udpv5.Lookup(target)
-		nodes := udpv5.AllNodes()
-		tmplog.Println("peers", len(nodes))
-
-
-		for _, n := range nodes {
-			tmplog.Println(time.Now())
-			//tmplog.Println("pinging", n)
-			//err := udpv5.Ping(n)
-			//if err != nil {
-			//	tmplog.Println(err)
-			//}
-
-			response, err := udpv5.TalkRequest(n, "bbb", []byte(nodename + " is making a request. "))
-			tmplog.Println("talking talkrequest", err)
-			tmplog.Println(string(response))
-
-			//udpv5.LocalNode().SetStaticIP(realaddr.IP)
-			//udpv5.LocalNode().Set
-
-			tmplog.Printf("listening with %v:%v", udpv5.Self().IP(), udpv5.Self().UDP())
-		}
-
-		// Pull the disv5 codebase, expose the routing table
-	}
-}
-
-func random32Byte() [32]byte {
-	token := [32]byte{}
-	rand.Read(token[:])
-	return token
-}
-
-
-
-func createLocalNode(
-	privKey *ecdsa.PrivateKey,
-	ipAddr net.IP,
-	udpPort int) *enode.LocalNode {
-	db, err := enode.OpenDB("")
-	if err != nil {
-		tmplog.Fatal(err)
-	}
-	localNode := enode.NewLocalNode(db, privKey)
-
-	ipEntry := enr.IP(ipAddr)
-	udpEntry := enr.UDP(udpPort)
-	localNode.Set(ipEntry)
-	localNode.Set(udpEntry)
-
-	return localNode
-}
