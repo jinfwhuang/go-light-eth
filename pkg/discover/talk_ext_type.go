@@ -124,7 +124,7 @@ func (c *TalkExtConnection) generatePackets(msg []byte) []TalkExtPacket {
 }
 
 
-func asTalkExtProtocol(proc string) string {
+func AsTalkExtProtocol(proc string) string {
 	if strings.ContainsAny(proc, "-") {
 		return proc
 	} else {
@@ -135,7 +135,7 @@ func asTalkExtProtocol(proc string) string {
 
 func isTalkExtProtocol(proc string) bool {
 	parts := strings.Split(proc, "-")
-	inferredProc := asTalkExtProtocol(parts[0])
+	inferredProc := AsTalkExtProtocol(parts[0])
 
 	return inferredProc == proc
 }

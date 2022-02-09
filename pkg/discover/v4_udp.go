@@ -58,7 +58,7 @@ const (
 	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
 
 	// Discovery packets are defined to be no larger than 1280 bytes.
-	// IncomingPackets larger than this size will be cut at the end and treated
+	// Packets larger than this size will be cut at the end and treated
 	// as invalid because their hash won't match.
 	maxPacketSize = 1280
 )

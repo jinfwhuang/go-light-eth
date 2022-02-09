@@ -48,7 +48,7 @@ func Test_TalkRequestExtDerser(t *testing.T) {
 
 func Test_toTalkExtProtocol(t *testing.T) {
 	procStr := "jinfwhuang"
-	talkExtProcStr := asTalkExtProtocol(procStr)
+	talkExtProcStr := AsTalkExtProtocol(procStr)
 
 	tmplog.Println(talkExtProcStr)
 	tmplog.Println(isTalkExtProtocol(talkExtProcStr))

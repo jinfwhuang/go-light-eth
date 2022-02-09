@@ -370,6 +370,8 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 // ping calls PING on a node and waits for a PONG response.
 func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 	req := &v5wire.Ping{ENRSeq: t.localNode.Node().Seq()}
+
+	tmplog.Println(req.ENRSeq)
 	resp := t.call(n, v5wire.PongMsg, req)
 	defer t.callDone(resp)
 
@@ -642,7 +644,7 @@ func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c
 		return nonce, err
 	}
 
-	tmplog.Println("udp write", packet.Name(), len(enc))
+	tmplog.Println("udp write", packet.Name(), len(enc), "to", toAddr, "sender-whoareyou", c)
 
 	_, err = t.conn.WriteToUDP(enc, toAddr)
 	t.log.Info(">> "+packet.Name(), "Id", toID, "addr", addr)
@@ -667,25 +669,27 @@ func (t *UDPv5) readLoop() {
 			}
 			return
 		}
-		data := make([]byte, nbytes)
-
 		// TODO: debug
-		copy(data, buf[:nbytes])
-		t.debugRaw(data, from)
+		data := make([]byte, nbytes)
+		copy(data, buf)
+		//t.debugRaw(data, from)
+		//t.debugRaw(buf[:nbytes], from)
 
-		t.dispatchReadPacket(from, data)
+		t.dispatchReadPacket(from, buf[:nbytes])
 	}
 }
 
-func (t *UDPv5) debugRaw(data []byte, fromAddr *net.UDPAddr) {
-	addr := fromAddr.String()
-	_, _, packet, err := t.codec.Decode(data, addr)
-	if err != nil {
-		tmplog.Fatal(err)
-		//t.log.Debug("Bad discv5 packet", "Id", fromID, "addr", addr, "err", err)
-	}
-	tmplog.Println("udp read", packet.Name(), len(data))
-}
+//func (t *UDPv5) debugRaw(data []byte, fromAddr *net.UDPAddr) {
+//	//tmplog.Println("udp read", len(data))
+//	addr := fromAddr.String()
+//	fromID, fromNode, packet, err := t.codec.Decode(data, addr)
+//	if err != nil {
+//		tmplog.Fatal(err)
+//		//t.log.Debug("Bad discv5 packet", "Id", fromID, "addr", addr, "err", err)
+//	}
+//	tmplog.Println("udp read", packet.Name(), len(data), "from", fromAddr)
+//	tmplog.Println("fromId", fromID, "fromNode", fromNode)
+//}
 
 
 // dispatchReadPacket sends a packet into the dispatch loop.
@@ -702,12 +706,14 @@ func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
 func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	addr := fromAddr.String()
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
+	tmplog.Println("udp read", packet.Name(), len(rawpacket), "from", fromAddr, "fromId", fromID, "fromNode", fromNode)
 	if err != nil {
 		t.log.Debug("Bad discv5 packet", "Id", fromID, "addr", addr, "err", err)
 		return err
 	}
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
+		tmplog.Println("adding a new node", fromNode)
 		t.tab.addSeenNode(wrapNode(fromNode))
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
@@ -805,6 +811,8 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *
 	c.handshakeCount++
 	c.challenge = p
 	p.Node = c.node
+
+	tmplog.Println("handling whoareyou", c, c.challenge)
 	t.sendCall(c)
 }
 

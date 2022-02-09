@@ -14,7 +14,7 @@ func (t *UDPv5) RegisterTalkExtHandler(protocol string, handler TalkRequestHandl
 
 
 	tmplog.Println(protocol)
-	protocol = asTalkExtProtocol(protocol)
+	protocol = AsTalkExtProtocol(protocol)
 	tmplog.Println(protocol)
 	t.TalkExtHandlers[protocol] = handler
 
@@ -29,7 +29,7 @@ func (t *UDPv5) RegisterTalkExtHandler(protocol string, handler TalkRequestHandl
 So to speak: Client action
  */
 func (t *UDPv5) TalkRequestExt(n *enode.Node, protocol string, request []byte) ([]byte, error) {
-	protocol = asTalkExtProtocol(protocol)
+	protocol = AsTalkExtProtocol(protocol)
 
 	// Setup TalkConn
 	talkConn := NewTalkExtConnection()
@@ -135,9 +135,11 @@ func (t *UDPv5) handleTalkExt(p *v5wire.TalkRequest, fromID enode.ID, fromAddr *
 }
 
 func (t *UDPv5) lookupWithCache(id enode.ID) *enode.Node {
-	n := t.tab.getNode(id)
+	tmplog.Println("looking for a node", len(t.AllNodes()))
+	n := t.tab.findNode(id)
 	if n == nil {
-		tmplog.Fatal("cannot find node")
+		tmplog.Println("cannot find node, skipping this response")
+		return nil
 	}
 	//if n != nil {
 	//	ns := t.Lookup(id)
@@ -147,6 +149,7 @@ func (t *UDPv5) lookupWithCache(id enode.ID) *enode.Node {
 	//} else {
 	//	tmplog.Println("found cache")
 	//}
+	tmplog.Println("found a responding note")
 	return n
 }
 
@@ -166,6 +169,10 @@ func (t *UDPv5) sendTalkExtResp(p *v5wire.TalkRequest, fromID enode.ID, fromAddr
 
 	//nn := &enode.Node{}
 	nn := t.lookupWithCache(fromID)
+	if nn == nil {
+		return
+	}
+
 	tmplog.Println("responding to node", nn.IP(), nn.UDP())
 	// Send all packets
 	for i, packet := range packets {
