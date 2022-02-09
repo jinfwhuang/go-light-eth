@@ -101,8 +101,9 @@ type UDPv5 struct {
 	cancelCloseCtx context.CancelFunc
 	wg             sync.WaitGroup
 
-	TalkExtConnections map[ConnectionId]TalkExtConnection
+	TalkExtConnections map[ConnectionId]*TalkExtConnection
 	TalkExtHandlers map[string]TalkRequestHandler
+	TalkExtLock     sync.Mutex
 
 }
 
@@ -172,6 +173,11 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		callCh:        make(chan *callV5),
 		callDoneCh:    make(chan *callV5),
 		respTimeoutCh: make(chan *callTimeout),
+		//packetInCh:    make(chan ReadPacket, 300),
+		//readNextCh:    make(chan struct{}, 300),
+		//callCh:        make(chan *callV5, 300),
+		//callDoneCh:    make(chan *callV5, 300),
+		//respTimeoutCh: make(chan *callTimeout, 300),
 		// state of dispatch
 		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock),
 		activeCallByNode: make(map[enode.ID]*callV5),
@@ -181,7 +187,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		closeCtx:       closeCtx,
 		cancelCloseCtx: cancelCloseCtx,
 
-		TalkExtConnections: make(map[ConnectionId]TalkExtConnection),
+		TalkExtConnections: make(map[ConnectionId]*TalkExtConnection),
 		TalkExtHandlers: make(map[string]TalkRequestHandler),
 	}
 	tab, err := newTable(t, t.db, cfg.Bootnodes, cfg.Log)
@@ -635,8 +641,11 @@ func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c
 		t.log.Warn(">> "+packet.Name(), "Id", toID, "addr", addr, "err", err)
 		return nonce, err
 	}
+
+	tmplog.Println("udp write", packet.Name(), len(enc))
+
 	_, err = t.conn.WriteToUDP(enc, toAddr)
-	t.log.Trace(">> "+packet.Name(), "Id", toID, "addr", addr)
+	t.log.Info(">> "+packet.Name(), "Id", toID, "addr", addr)
 	return nonce, err
 }
 
@@ -658,9 +667,26 @@ func (t *UDPv5) readLoop() {
 			}
 			return
 		}
-		t.dispatchReadPacket(from, buf[:nbytes])
+		data := make([]byte, nbytes)
+
+		// TODO: debug
+		copy(data, buf[:nbytes])
+		t.debugRaw(data, from)
+
+		t.dispatchReadPacket(from, data)
 	}
 }
+
+func (t *UDPv5) debugRaw(data []byte, fromAddr *net.UDPAddr) {
+	addr := fromAddr.String()
+	_, _, packet, err := t.codec.Decode(data, addr)
+	if err != nil {
+		tmplog.Fatal(err)
+		//t.log.Debug("Bad discv5 packet", "Id", fromID, "addr", addr, "err", err)
+	}
+	tmplog.Println("udp read", packet.Name(), len(data))
+}
+
 
 // dispatchReadPacket sends a packet into the dispatch loop.
 func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
@@ -697,6 +723,8 @@ func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, p v5w
 	ac := t.activeCallByNode[fromID]
 	if ac == nil || !bytes.Equal(p.RequestID(), ac.reqid) {
 		t.log.Debug(fmt.Sprintf("Unsolicited/late %s response", p.Name()), "Id", fromID, "addr", fromAddr)
+
+		t.log.Info(fmt.Sprintf("fffff %s response", p.Name()), "Id", fromID, "addr", fromAddr)
 		return false
 	}
 	if !fromAddr.IP.Equal(ac.node.IP()) || fromAddr.Port != ac.node.UDP() {

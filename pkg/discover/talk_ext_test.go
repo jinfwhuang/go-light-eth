@@ -48,7 +48,7 @@ func Test_TalkRequestExtDerser(t *testing.T) {
 
 func Test_toTalkExtProtocol(t *testing.T) {
 	procStr := "jinfwhuang"
-	talkExtProcStr := toTalkExtProtocol(procStr)
+	talkExtProcStr := asTalkExtProtocol(procStr)
 
 	tmplog.Println(talkExtProcStr)
 	tmplog.Println(isTalkExtProtocol(talkExtProcStr))
@@ -57,8 +57,8 @@ func Test_toTalkExtProtocol(t *testing.T) {
 
 func Test_splitMessage(t *testing.T) {
 	data := randomBytes(1090)
-
-	packets := splitMessage(0, data)
+	talkConn := TalkExtConnection {}
+	packets := talkConn.generatePackets(data)
 
 	tmplog.Println(len(packets))
 
@@ -74,4 +74,19 @@ func Test_splitMessage(t *testing.T) {
 	//tmplog.Println(packets)
 
 }
-//splitMessage
+
+func Test_Marshalling(t *testing.T) {
+	data := []byte("ffdsfdfs")
+	packet1 := TalkExtPacket {
+		Id: 0,
+		SeqNum: 0 ,
+		LastSeqNum: 1,
+		Packet: data,
+	}
+	packet2 := TalkExtPacket{}
+	packet2.unmarshal(packet1.marshal())
+
+	tmplog.Println(packet1)
+	tmplog.Println(packet2)
+
+}
