@@ -196,11 +196,11 @@ func (s *Disv5Service) Start(nodename string) {
 		return input
 	})
 
-	//// TALKEXT handler
-	//udpv5.RegisterTalkExtHandler(TalkProc, func (node enode.ID, addr *net.UDPAddr, input []byte) []byte {
-	//	tmplog.Println("invoking TALKEXT handler", discover.AsTalkExtProtocol(TalkProc),  "data size", len(input))
-	//	return input
-	//})
+	// TALKEXT handler
+	udpv5.RegisterTalkExtHandler(TalkProc, func (node enode.ID, addr *net.UDPAddr, input []byte) []byte {
+		tmplog.Println("invoking TALKEXT handler", discover.AsTalkExtProtocol(TalkProc),  "data size", len(input))
+		return input
+	})
 
 
 	//target := random32Byte()
@@ -219,23 +219,23 @@ func (s *Disv5Service) Start(nodename string) {
 
 		for _, n := range nodes {
 			if nodename == NodeName3 && n.UDP() == node1Env.port {
-					//udpv5.RequestENR(n)
 
-					//// small TALKEXT
-					////response, err := udpv5.TalkRequestExt(n, TalkProc, []byte(nodename + " made a request. | "))
-					//response, err := udpv5.TalkRequestExt(n, TalkProc, []byte("jin"))
-					//if err != nil {
-					//	tmplog.Println(err)
-					//}
-					//tmplog.Println("Just made a talkext", string(response))
+				//// small TALKREQUEST
+				//response, err := udpv5.TalkRequest(n, TalkProc, []byte(nodename + " made a request. | "))
+				//if err != nil {
+				//	tmplog.Println(err)
+				//}
+				//tmplog.Println("Just made a talkrequest", string(response))
 
-					//// small TALKREQUEST
-					//response, err := udpv5.TalkRequest(n, TalkProc, []byte(nodename + " made a request. | "))
-					//if err != nil {
-					//	tmplog.Println(err)
-					//}
-					//tmplog.Println("Just made a talkrequest", string(response))
-					//
+
+				// small TALKEXT
+				//response, err := udpv5.TalkRequestExt(n, TalkProc, []byte(nodename + " made a request. | "))
+				response, err := udpv5.TalkRequestExt(n, TalkProc, []byte("jin"))
+				if err != nil {
+					tmplog.Println(err)
+				}
+				tmplog.Println("Just made a talkext", string(response))
+
 
 					// Large quest should fail
 					//body := _requestBody(1281)
