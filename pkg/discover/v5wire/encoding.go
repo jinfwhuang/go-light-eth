@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	tmplog "log"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -452,8 +453,12 @@ func (c *Codec) Decode(input []byte, addr string) (src enode.ID, n *enode.Node, 
 	case flagHandshake:
 		n, p, err = c.decodeHandshakeMessage(addr, &head, headerData, msgData)
 	case flagMessage:
+		//tmplog.Println("flagMessage", head, msgData)
 		p, err = c.decodeMessage(addr, &head, headerData, msgData)
+		//tmplog.Println(p, err)
+		//tmplog.Println("finished decoding")
 	default:
+		tmplog.Println("invalid")
 		err = errInvalidFlag
 	}
 	return head.src, n, p, err

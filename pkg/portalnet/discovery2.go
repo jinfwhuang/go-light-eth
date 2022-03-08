@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 
+	//"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/jinfwhuang/go-light-eth/pkg/discover"
 
 	tmplog "log"
@@ -23,18 +24,7 @@ const (
 	//FixedEnr = "enr:-Iq4QB1Q4x83fxo_A4HKY7aLD_E9s0-DA1IKbv1tIGP2E1eOOLW4FS5xCWcLw5AcQB5cl-mVVFTRiU2-GuSFUYTTVfqGAX6XThQigmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQMqc-jmk1aq9OQJv2tquwGiLjZHLijJrAxqF6irWV8eoYN1ZHCC5dA"
 	//FixedEnr =
 )
-// Listener defines the discovery V5 network interface that is used
-// to communicate with other peers.
-type Listener interface {
-	Self() *enode.Node
-	Close()
-	Lookup(enode.ID) []*enode.Node
-	Resolve(*enode.Node) *enode.Node
-	RandomNodes() enode.Iterator
-	Ping(*enode.Node) error
-	RequestENR(*enode.Node) (*enode.Node, error)
-	LocalNode() *enode.LocalNode
-}
+
 
 type NodeEnv struct {
 	name string
@@ -64,7 +54,9 @@ var (
 )
 
 
-
+const (
+	TalkProc = "talkprotocol"
+)
 
 func Aaa() {
 	tmplog.Println("fff")
@@ -158,7 +150,10 @@ func startLocalhostV5(nodename string) *discover.UDPv5 {
 	ln := enode.NewLocalNode(db, cfg.PrivateKey)
 
 	// Listen
-	socket, err := net.ListenUDP("udp4", addr)
+	//conn, err := net.ListenUDP(networkVersion, udpAddr)
+
+	//socket, err := net.ListenUDP("udp4", addr)
+	socket, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		tmplog.Fatal(err)
 	}
@@ -171,7 +166,7 @@ func startLocalhostV5(nodename string) *discover.UDPv5 {
 	if err != nil {
 		tmplog.Fatal(err)
 	}
-	tmplog.Printf("upd on %s:%d", ln.Node().IP(), ln.Node().UDP())
+	tmplog.Printf("udp on %s:%d", ln.Node().IP(), ln.Node().UDP())
 	tmplog.Printf("current: %s", ln.Node())
 
 	db.UpdateNode(ln.Node())
@@ -187,13 +182,6 @@ func startLocalhostV5(nodename string) *discover.UDPv5 {
 		tmplog.Println(ln.Seq())
 	}
 
-	// register a TalkRequest handler
-	udp.RegisterTalkHandler("bbb", func (node enode.ID, addr *net.UDPAddr, input []byte) []byte {
-		tmplog.Println("requesting from: ", addr)
-		tmplog.Println("responding from: ", udp.LocalNode().Node().IP(), udp.LocalNode().Node().UDP())
-		return append(input, []byte(nodename + "responded")...)
-	})
-
 
 	return udp
 	//return nil
@@ -202,7 +190,17 @@ func startLocalhostV5(nodename string) *discover.UDPv5 {
 func (s *Disv5Service) Start(nodename string) {
 	udpv5 := startLocalhostV5(nodename)
 
-	setupTalkExt(udpv5)
+	// TALKREQUEST HANDLER
+	udpv5.RegisterTalkHandler(TalkProc, func (node enode.ID, addr *net.UDPAddr, input []byte) []byte {
+		tmplog.Println("invoking TALKREQ handler", TalkProc,  "data size", len(input))
+		return input
+	})
+
+	// TALKEXT handler
+	udpv5.RegisterTalkExtHandler(TalkProc, func (node enode.ID, addr *net.UDPAddr, input []byte) []byte {
+		tmplog.Println("invoking TALKEXT handler", discover.AsTalkExtProtocol(TalkProc),  "data size", len(input))
+		return input
+	})
 
 
 	//target := random32Byte()
@@ -210,46 +208,64 @@ func (s *Disv5Service) Start(nodename string) {
 
 	// event loop
 	for {
-		tmplog.Printf("listening with %v:%v", udpv5.Self().IP(), udpv5.Self().UDP())
-		tmplog.Printf("self %s", udpv5.LocalNode().Node())
-
-		//udpv5.Lookup(target)
 		nodes := udpv5.AllNodes()
-		tmplog.Println("peers", len(nodes))
+		//tmplog.Println("how many peers connected:", len(nodes))
+		//tmplog.Printf("listening with %v:%v", udpv5.Self().IP(), udpv5.Self().UDP())
 
+		tmplog.Println("peers", len(nodes))
+		for _, n := range nodes {
+			tmplog.Println("---", n.IP(), n.UDP(),  time.Now(), "---")
+		}
 
 		for _, n := range nodes {
-			tmplog.Println(time.Now(), udpv5.Self().IP(), udpv5.Self().UDP())
+			if nodename == NodeName3 && n.UDP() == node1Env.port {
 
-			if nodename == NodeName3 {
-				//response, err := udpv5.TalkRequest(n, "bbb", []byte(nodename + " made a request. | "))
-				//tmplog.Println("Just made a talkrequest", err, string(response))
-
-
-				//// Large quest should fail
-				//body := _requestBody(1281)
-				//tmplog.Println("About to make a large talkrequest", len(body), cap(body), body[:13])
-				////tmplog.Println(len(body), "utf validitiy", utf8.Valid(body[:50]))
-				//resp2, err := udpv5.TalkRequest(n, "bbb", body)
+				//// small TALKREQUEST
+				//response, err := udpv5.TalkRequest(n, TalkProc, []byte(nodename + " made a request. | "))
 				//if err != nil {
-				//	tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2)
-				//} else {
-				//	tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2[:13])
+				//	tmplog.Println(err)
 				//}
+				//tmplog.Println("Just made a talkrequest", string(response))
 
-				// Talk ext
-				body := _requestBody(100)
-				tmplog.Println("About to make talk-ext", len(body), cap(body), body[:13])
-				resp2, err := TalkRequestExt(udpv5, n, "bbb", body)
+
+				// small TALKEXT
+				//response, err := udpv5.TalkRequestExt(n, TalkProc, []byte(nodename + " made a request. | "))
+				response, err := udpv5.TalkRequestExt(n, TalkProc, []byte("jin"))
 				if err != nil {
-					tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2)
-				} else {
-					tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2[:13])
+					tmplog.Println(err)
 				}
+				tmplog.Println("Just made a talkext", string(response))
+
+
+					// Large quest should fail
+					//body := _requestBody(1281)
+					//tmplog.Println("About to make a large talkrequest", len(body), cap(body), body[:13])
+					////tmplog.Println(len(body), "utf validitiy", utf8.Valid(body[:50]))
+					//resp2, err := udpv5.TalkRequest(n, TalkProc, body)
+					//if err != nil {
+					//	tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2)
+					//} else {
+					//	tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2[:13])
+					//}
+
+					//// Talk ext
+					//body := _requestBody(100)
+					//tmplog.Println("About to make talk-ext", len(body), cap(body), body[:13])
+					//resp2, err := TalkRequestExt(udpv5, n, TalkProc, body)
+					//if err != nil {
+					//	tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2)
+					//} else {
+					//	tmplog.Println("Completed a large talkrequest", len(body), cap(body), err, resp2[:13])
+					//}
 			}
 
 		}
-		time.Sleep(time.Second * 5)
+
+		//if nodename == NodeName3 {
+		//	tmplog.Fatal("die...")
+		//}
+
+		time.Sleep(time.Second * 3)
 	}
 }
 

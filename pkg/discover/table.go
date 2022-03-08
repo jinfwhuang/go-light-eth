@@ -26,6 +26,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	tmplog "log"
 	mrand "math/rand"
 	"net"
 	"sort"
@@ -166,14 +167,44 @@ func (tab *Table) getNode(id enode.ID) *enode.Node {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 
+	tmplog.Println(id)
 	b := tab.bucket(id)
 	for _, e := range b.entries {
+		tmplog.Println(e.ID(), e.IP(), e.UDP())
 		if e.ID() == id {
 			return unwrapNode(e)
 		}
 	}
 	return nil
 }
+
+// getNode returns the node with the given ID or nil if it isn't in the table.
+func (tab *Table) findNode(id enode.ID) *enode.Node {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+
+	tmplog.Println(id)
+
+	//b := tab.bucket(id)
+	for _, b := range tab.buckets {
+		for _, e := range b.entries {
+			tmplog.Println(e.ID(), e.IP(), e.UDP())
+			if e.ID() == id {
+				return unwrapNode(e)
+			}
+		}
+	}
+	//for _, b := range tab.buckets {
+	//	for _, e := range b.replacements {
+	//		tmplog.Println(e.ID(), e.IP(), e.UDP())
+	//		if e.ID() == id {
+	//			return unwrapNode(e)
+	//		}
+	//	}
+	//}
+	return nil
+}
+
 
 // close terminates the network listener and flushes the node database.
 func (tab *Table) close() {

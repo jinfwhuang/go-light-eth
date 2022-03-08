@@ -48,8 +48,12 @@ const (
 	RegconfirmationMsg
 	TopicQueryMsg
 
+	TalkExtMsg     = byte(33)
+	TalkExtRespMsg = byte(34)
+
 	UnknownPacket   = byte(255) // any non-decryptable packet
 	WhoareyouPacket = byte(254) // the WHOAREYOU packet
+
 )
 
 // Protocol messages.
@@ -143,6 +147,19 @@ type (
 		ReqID []byte
 		Topic []byte
 	}
+
+	TalkExt struct {
+		ReqID    []byte
+		Protocol string
+		Message  []byte
+	}
+
+	TalkExtResp struct {
+		ReqID    []byte
+		Protocol string
+		Message  []byte
+	}
+
 )
 
 // DecodeMessage decodes the message body of a packet.
@@ -171,6 +188,10 @@ func DecodeMessage(ptype byte, body []byte) (Packet, error) {
 		dec = new(Regconfirmation)
 	case TopicQueryMsg:
 		dec = new(TopicQuery)
+	case TalkExtMsg:
+		dec = new(TalkExt)
+	case TalkExtRespMsg:
+		dec = new(TalkExtResp)
 	default:
 		return nil, fmt.Errorf("unknown packet type %d", ptype)
 	}
@@ -247,3 +268,14 @@ func (*TopicQuery) Name() string             { return "TOPICQUERY/v5" }
 func (*TopicQuery) Kind() byte               { return TopicQueryMsg }
 func (p *TopicQuery) RequestID() []byte      { return p.ReqID }
 func (p *TopicQuery) SetRequestID(id []byte) { p.ReqID = id }
+
+func (*TalkExt) Name() string             { return "TALKEXT/v5" }
+func (*TalkExt) Kind() byte               { return TalkExtMsg }
+func (p *TalkExt) RequestID() []byte      { return p.ReqID }
+func (p *TalkExt) SetRequestID(id []byte) { p.ReqID = id }
+
+func (*TalkExtResp) Name() string             { return "TALKEXTRESP/v5" }
+func (*TalkExtResp) Kind() byte               { return TalkExtRespMsg }
+func (p *TalkExtResp) RequestID() []byte      { return p.ReqID }
+func (p *TalkExtResp) SetRequestID(id []byte) { p.ReqID = id }
+

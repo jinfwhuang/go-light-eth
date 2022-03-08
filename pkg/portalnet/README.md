@@ -4,8 +4,8 @@
 
 #### TODOs
 
-2. wraps *discover.UDPv5 into "sctp" disv5 so that TALKREQUEST_EXT is reliable and has no size limit
-
+- Use the "TalkExtRespMsg" for responding messages
+- Use the TalkExt message type to talk for a large message
 
 
 https://github.com/ishidawataru/sctp/tree/master/example

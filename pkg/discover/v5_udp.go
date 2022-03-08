@@ -101,10 +101,17 @@ type UDPv5 struct {
 	cancelCloseCtx context.CancelFunc
 	wg             sync.WaitGroup
 
-	TalkExtConnections map[ConnectionId]TalkExtConnection
+	TalkExtConnections map[ConnectionId]*TalkExtConnection
 	TalkExtHandlers map[string]TalkRequestHandler
+	TalkExtLock     sync.Mutex
+
+	TalkExtWriteCh chan *callV5
+	TalkExtReadCh  chan *TalkExtReadItem
 
 }
+
+
+
 
 type ConnectionId uint64
 
@@ -148,6 +155,9 @@ func ListenV5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	t.wg.Add(2)
 	go t.readLoop()
 	go t.dispatch()
+
+	go t.talkextReadLoop()
+	go t.talkextWriteLoop()
 	return t, nil
 }
 
@@ -167,11 +177,16 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		clock:        cfg.Clock,
 		trhandlers:   make(map[string]TalkRequestHandler),
 		// channels into dispatch
-		packetInCh:    make(chan ReadPacket, 1),
-		readNextCh:    make(chan struct{}, 1),
-		callCh:        make(chan *callV5),
-		callDoneCh:    make(chan *callV5),
-		respTimeoutCh: make(chan *callTimeout),
+		//packetInCh:    make(chan ReadPacket, 1),
+		//readNextCh:    make(chan struct{}, 1),
+		//callCh:        make(chan *callV5),
+		//callDoneCh:    make(chan *callV5),
+		//respTimeoutCh: make(chan *callTimeout),
+		packetInCh:    make(chan ReadPacket, 300),
+		readNextCh:    make(chan struct{}, 300),
+		callCh:        make(chan *callV5, 300),
+		callDoneCh:    make(chan *callV5, 300),
+		respTimeoutCh: make(chan *callTimeout, 300),
 		// state of dispatch
 		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock),
 		activeCallByNode: make(map[enode.ID]*callV5),
@@ -181,8 +196,12 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		closeCtx:       closeCtx,
 		cancelCloseCtx: cancelCloseCtx,
 
-		TalkExtConnections: make(map[ConnectionId]TalkExtConnection),
+		TalkExtConnections: make(map[ConnectionId]*TalkExtConnection),
 		TalkExtHandlers: make(map[string]TalkRequestHandler),
+
+		TalkExtWriteCh:        make(chan *callV5, 300),
+		TalkExtReadCh:        make(chan *TalkExtReadItem, 300),
+
 	}
 	tab, err := newTable(t, t.db, cfg.Bootnodes, cfg.Log)
 	if err != nil {
@@ -364,6 +383,8 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 // ping calls PING on a node and waits for a PONG response.
 func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 	req := &v5wire.Ping{ENRSeq: t.localNode.Node().Seq()}
+
+	tmplog.Println(req.ENRSeq)
 	resp := t.call(n, v5wire.PongMsg, req)
 	defer t.callDone(resp)
 
@@ -538,12 +559,16 @@ func (t *UDPv5) dispatch() {
 			id := c.node.ID()
 			active := t.activeCallByNode[id]
 			if active != c {
-				panic("BUG: callDone for inactive call")
+				//tmplog.Println(active)
+				//tmplog.Println(c)
+				//tmplog.Println("BUG: callDone for inactive call")
+				//panic("BUG: callDone for inactive call")
+			} else {
+				c.timeout.Stop()
+				delete(t.activeCallByAuth, c.nonce)
+				delete(t.activeCallByNode, id)
+				t.sendNextCall(id)
 			}
-			c.timeout.Stop()
-			delete(t.activeCallByAuth, c.nonce)
-			delete(t.activeCallByNode, id)
-			t.sendNextCall(id)
 
 		case p := <-t.packetInCh:
 			t.handlePacket(p.Data, p.Addr)
@@ -635,8 +660,11 @@ func (t *UDPv5) send(toID enode.ID, toAddr *net.UDPAddr, packet v5wire.Packet, c
 		t.log.Warn(">> "+packet.Name(), "Id", toID, "addr", addr, "err", err)
 		return nonce, err
 	}
+
+	tmplog.Println("udp write", packet.Name(), len(enc), "to", toAddr, "sender-whoareyou", c)
+
 	_, err = t.conn.WriteToUDP(enc, toAddr)
-	t.log.Trace(">> "+packet.Name(), "Id", toID, "addr", addr)
+	t.log.Info(">> "+packet.Name(), "Id", toID, "addr", addr)
 	return nonce, err
 }
 
@@ -658,9 +686,29 @@ func (t *UDPv5) readLoop() {
 			}
 			return
 		}
+		//// TODO: debug
+		//data := make([]byte, nbytes)
+		//copy(data, buf)
+		//t.debugRaw(data, from)
+		//t.debugRaw(buf[:nbytes], from)
+
 		t.dispatchReadPacket(from, buf[:nbytes])
 	}
 }
+
+
+//func (t *UDPv5) debugRaw(data []byte, fromAddr *net.UDPAddr) {
+//	//tmplog.Println("udp read", len(data))
+//	addr := fromAddr.String()
+//	fromID, fromNode, packet, err := t.codec.Decode(data, addr)
+//	if err != nil {
+//		tmplog.Fatal(err)
+//		//t.log.Debug("Bad discv5 packet", "Id", fromID, "addr", addr, "err", err)
+//	}
+//	tmplog.Println("udp read", packet.Name(), len(data), "from", fromAddr)
+//	tmplog.Println("fromId", fromID, "fromNode", fromNode)
+//}
+
 
 // dispatchReadPacket sends a packet into the dispatch loop.
 func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
@@ -672,16 +720,22 @@ func (t *UDPv5) dispatchReadPacket(from *net.UDPAddr, content []byte) bool {
 	}
 }
 
-// handlePacket decodes and processes an incoming packet from the network.
 func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	addr := fromAddr.String()
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
+
 	if err != nil {
-		t.log.Debug("Bad discv5 packet", "Id", fromID, "addr", addr, "err", err)
-		return err
+		tmplog.Println("Bad discv5 packet", "Id", fromID, "addr", addr, "err", err)
+		tmplog.Fatal(err)
+		//t.log.Info("Bad discv5 packet", "Id", fromID, "addr", addr, "err", err)
+		//return err
 	}
+
+	tmplog.Println("udp read", packet.Name(), len(rawpacket), "from", fromAddr, "fromId", fromID, "fromNode", fromNode)
+
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
+		tmplog.Println("adding a new node", fromNode)
 		t.tab.addSeenNode(wrapNode(fromNode))
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
@@ -697,6 +751,8 @@ func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr *net.UDPAddr, p v5w
 	ac := t.activeCallByNode[fromID]
 	if ac == nil || !bytes.Equal(p.RequestID(), ac.reqid) {
 		t.log.Debug(fmt.Sprintf("Unsolicited/late %s response", p.Name()), "Id", fromID, "addr", fromAddr)
+
+		t.log.Info(fmt.Sprintf("fffff %s response", p.Name()), "Id", fromID, "addr", fromAddr)
 		return false
 	}
 	if !fromAddr.IP.Equal(ac.node.IP()) || fromAddr.Port != ac.node.UDP() {
@@ -741,11 +797,25 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr *net.UDPAddr) 
 	case *v5wire.Nodes:
 		t.handleCallResponse(fromID, fromAddr, p)
 	case *v5wire.TalkRequest:
-		//t.handleTalkRequest(p, fromID, fromAddr)
-		t.handleTalkExt(p, fromID, fromAddr)
+		t.handleTalkRequest(p, fromID, fromAddr)
+		//t.handleTalkExt(p, fromID, fromAddr)
 	case *v5wire.TalkResponse:
 		t.handleCallResponse(fromID, fromAddr, p)
+
+	case *v5wire.TalkExt:
+		t.TalkExtReadCh <- &TalkExtReadItem {
+			talkExt: p,
+			fromID: fromID,
+			fromAddr: fromAddr,
+		}
+		//t.handleCallResponse(fromID, fromAddr, p)
 	}
+}
+
+type TalkExtReadItem struct {
+	talkExt *v5wire.TalkExt
+	fromID enode.ID
+	fromAddr *net.UDPAddr
 }
 
 // handleUnknown initiates a handshake by responding with WHOAREYOU.
@@ -777,6 +847,8 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr *
 	c.handshakeCount++
 	c.challenge = p
 	p.Node = c.node
+
+	tmplog.Println("handling whoareyou", c, c.challenge)
 	t.sendCall(c)
 }
 
