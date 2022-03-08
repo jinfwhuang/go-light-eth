@@ -18,7 +18,6 @@ package v5wire
 
 import (
 	"fmt"
-	tmplog "log"
 	"net"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -155,6 +154,12 @@ type (
 		Message  []byte
 	}
 
+	TalkExtResp struct {
+		ReqID    []byte
+		Protocol string
+		Message  []byte
+	}
+
 )
 
 // DecodeMessage decodes the message body of a packet.
@@ -186,7 +191,7 @@ func DecodeMessage(ptype byte, body []byte) (Packet, error) {
 	case TalkExtMsg:
 		dec = new(TalkExt)
 	case TalkExtRespMsg:
-		tmplog.Fatal("ffff")
+		dec = new(TalkExtResp)
 	default:
 		return nil, fmt.Errorf("unknown packet type %d", ptype)
 	}
@@ -268,4 +273,9 @@ func (*TalkExt) Name() string             { return "TALKEXT/v5" }
 func (*TalkExt) Kind() byte               { return TalkExtMsg }
 func (p *TalkExt) RequestID() []byte      { return p.ReqID }
 func (p *TalkExt) SetRequestID(id []byte) { p.ReqID = id }
+
+func (*TalkExtResp) Name() string             { return "TALKEXTRESP/v5" }
+func (*TalkExtResp) Kind() byte               { return TalkExtRespMsg }
+func (p *TalkExtResp) RequestID() []byte      { return p.ReqID }
+func (p *TalkExtResp) SetRequestID(id []byte) { p.ReqID = id }
 

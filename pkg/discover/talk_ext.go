@@ -36,41 +36,12 @@ func (t *UDPv5) TalkRequestExt(n *enode.Node, protocol string, request []byte) (
 	talkConn := NewTalkExtConnection()
 	t.TalkExtConnections[talkConn.Id] = talkConn
 
+	tmplog.Println("client side", talkConn.Id)
+
 	// Send all outgoing packets
 	packets := talkConn.generatePackets(request)
-	tmplog.Println("start sending packets")
-	for i, packet := range packets {
-		tmplog.Println(i, packet)
-		//toAddr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
-		//t.rawSendTalkRequest2(n, n.ID(), toAddr, protocol, packet.marshal())
-
-		//req := &v5wire.TalkRequest{Protocol: protocol, Message: packet.marshal()}
-		//c := &callV5{
-		//	node:         n,
-		//	packet:       req,
-		//	responseType: v5wire.TalkResponseMsg,
-		//	reqid:        make([]byte, 8),
-		//	//ch:           make(chan v5wire.Packet, 1),
-		//	//err:          make(chan error, 1),
-		//}
-
-		req := &v5wire.TalkExt{Protocol: protocol, Message: packet.marshal()}
-		c := &callV5{
-			node:         n,
-			packet:       req,
-			responseType: v5wire.TalkExtRespMsg,
-			reqid:        make([]byte, 8),
-			//ch:           make(chan v5wire.Packet, 1),
-			//err:          make(chan error, 1),
-		}
-
-		// Assign request ID.
-		crand.Read(c.reqid)
-		req.SetRequestID(c.reqid)
-
-		tmplog.Println("sending a message to channel")
-		t.TalkExtWriteCh <- c
-		tmplog.Println("enqueue a message")
+	for _, packet := range packets {
+		t.sendPacket(n, protocol, &packet)
 	}
 	return nil, nil
 
@@ -89,42 +60,45 @@ func (t *UDPv5) TalkRequestExt(n *enode.Node, protocol string, request []byte) (
 	//}
 }
 
-/**
-So to speak: Client2 action
-*/
-func (t *UDPv5) TalkRequestExt2(n *enode.Node, protocol string, request []byte) ([]byte, error) {
-	protocol = AsTalkExtProtocol(protocol)
 
-	// Setup TalkConn
-	talkConn := NewTalkExtConnection()
-	t.TalkExtConnections[talkConn.Id] = talkConn
-
-	// Send all outgoing packets
-	packets := talkConn.generatePackets(request)
-	tmplog.Println("start sending packets")
-	for i, packet := range packets {
-		toAddr := &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
-
-		tmplog.Println(i, packet)
-		t.rawSendTalkRequest2(n, n.ID(), toAddr, protocol, packet.marshal())
-
+func (t *UDPv5)  sendPacket(n *enode.Node, protocol string, packet *TalkExtPacket) {
+	req := &v5wire.TalkExt{Protocol: protocol, Message: packet.marshal()}
+	c := &callV5{
+		node:         n,
+		packet:       req,
+		responseType: v5wire.TalkExtRespMsg,
+		reqid:        make([]byte, 8),
+		//ch:           make(chan v5wire.Packet, 1),
+		//err:          make(chan error, 1),
 	}
-	tmplog.Println("finished sending packets")
-	return nil, nil
 
-	//// Wait for a response stream to complete, i.e. all the response packets to arrive
-	//// Construct response
-	//deadline := time.Now().Add(10 * time.Second)
-	//for {
-	//	//tmplog.Println("completed?", talkConn.completed())
-	//	if talkConn.completed() {
-	//		return talkConn.getMessageFromPackets(), nil
-	//	}
-	//	if time.Now().After(deadline) {
-	//		return nil, fmt.Errorf("timeout, not completed")
-	//	}
-	//	time.Sleep(time.Millisecond * 2000) // TODO: use a signaling channel instead
-	//}
+	// Assign request ID.
+	crand.Read(c.reqid)
+	req.SetRequestID(c.reqid)
+
+	//tmplog.Println("sending a message to channel")
+	t.TalkExtWriteCh <- c
+}
+
+func (t *UDPv5)  sendRespPacket(n *enode.Node, protocol string, packet *TalkExtPacket) {
+	req := &v5wire.TalkExt{Protocol: protocol, Message: packet.marshal()}
+	c := &callV5{
+		node:         n,
+		packet:       req,
+		responseType: v5wire.TalkExtRespMsg,
+		reqid:        make([]byte, 8),
+		//ch:           make(chan v5wire.Packet, 1),
+		//err:          make(chan error, 1),
+	}
+
+	xxx
+
+	// Assign request ID.
+	crand.Read(c.reqid)
+	req.SetRequestID(c.reqid)
+
+	//tmplog.Println("sending a message to channel")
+	t.TalkExtWriteCh <- c
 }
 
 
@@ -155,25 +129,19 @@ func (t *UDPv5) lookupWithCache(id enode.ID) *enode.Node {
 Note:
 - The ConnectionID is the same as the incoming
  */
-func (t *UDPv5) sendTalkExtResp(p *v5wire.TalkRequest, fromID enode.ID, fromAddr *net.UDPAddr, talkConn *TalkExtConnection, data []byte) {
+func (t *UDPv5) sendTalkExtResp(p *v5wire.TalkExt, fromID enode.ID, fromAddr *net.UDPAddr, talkConn *TalkExtConnection, data []byte) {
 	packets := talkConn.generatePackets(data)
 	protocol := p.Protocol  // Must be protocol-ext
 
-	tmplog.Println(protocol)
-	tmplog.Println(packets)
-
-	//nn := &enode.Node{}
 	nn := t.lookupWithCache(fromID)
 	if nn == nil {
 		return
 	}
 
 	tmplog.Println("responding to node", nn.IP(), nn.UDP())
-	// Send all packets
 	for i, packet := range packets {
-		tmplog.Println(i,packet)
-		t.rawSendTalkRequest2(nn, fromID, fromAddr, protocol, packet.marshal())
-		tmplog.Println("finished", i)
+		tmplog.Println(i, len(packet.Packet))
+		t.sendRespPacket(nn, protocol, &packet)
 	}
 	tmplog.Println("finished responding to", nn.IP(), nn.UDP())
 
@@ -207,14 +175,6 @@ func (t *UDPv5) TalkRequestWithoutWaiting(n *enode.Node, protocol string, reques
 
 	defer t.callDone(resp)  // TODO: this need to be completed
 
-	//go func() {
-	//	select {
-	//	case respMsg := <-resp.ch:
-	//		tmplog.Println("only consuming, but don't really care", respMsg)
-	//	case err := <-resp.err:
-	//		tmplog.Println("only consuming, but don't really care", err)
-	//	}
-	//}()
 }
 
 

@@ -4,6 +4,7 @@
 
 #### TODOs
 
+- Use the "TalkExtRespMsg" for responding messages
 - Use the TalkExt message type to talk for a large message
 
 
